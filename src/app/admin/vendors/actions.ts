@@ -5,6 +5,8 @@ import { dbConnect } from "@/lib/db";
 import { requireRole } from "@/lib/guard";
 import { ROLES } from "@/lib/roles";
 import { runAction, type ActionResult } from "@/lib/action-result";
+import { logAudit } from "@/lib/audit";
+import { asObjectId } from "@/lib/ids";
 import { Vendor } from "@/models/Vendor";
 import { Subscription, type SubscriptionStatus } from "@/models/Subscription";
 import { User } from "@/models/User";
@@ -14,7 +16,8 @@ const DAY_MS = 86400000;
 /** Extend (or restart) a vendor's free trial by N days. */
 export async function extendTrial(vendorId: string, days: number): Promise<ActionResult> {
   return runAction(async () => {
-    await requireRole(ROLES.SUPER_ADMIN);
+    const session = await requireRole(ROLES.SUPER_ADMIN);
+    if (!asObjectId(vendorId)) return { ok: false, error: "Invalid vendor." };
     if (!Number.isInteger(days) || days <= 0 || days > 365) {
       return { ok: false, error: "Enter 1–365 days." };
     }
@@ -29,6 +32,14 @@ export async function extendTrial(vendorId: string, days: number): Promise<Actio
     sub.status = "trialing";
     await sub.save();
 
+    await logAudit({
+      action: "admin.extend_trial",
+      actor: session.user.id,
+      actorEmail: session.user.email ?? null,
+      role: session.user.role,
+      target: vendorId,
+      detail: `+${days} days`,
+    });
     revalidatePath("/admin/vendors");
     revalidatePath("/admin");
     return { ok: true, message: `Trial extended by ${days} days.` };
@@ -41,7 +52,8 @@ export async function setSubscriptionStatus(
   status: SubscriptionStatus
 ): Promise<ActionResult> {
   return runAction(async () => {
-    await requireRole(ROLES.SUPER_ADMIN);
+    const session = await requireRole(ROLES.SUPER_ADMIN);
+    if (!asObjectId(vendorId)) return { ok: false, error: "Invalid vendor." };
     if (!["trialing", "active", "expired"].includes(status)) {
       return { ok: false, error: "Invalid status." };
     }
@@ -54,6 +66,14 @@ export async function setSubscriptionStatus(
     if (status === "active") sub.plan = sub.plan ?? "manual";
     await sub.save();
 
+    await logAudit({
+      action: "admin.set_subscription_status",
+      actor: session.user.id,
+      actorEmail: session.user.email ?? null,
+      role: session.user.role,
+      target: vendorId,
+      detail: status,
+    });
     revalidatePath("/admin/vendors");
     revalidatePath("/admin");
     return { ok: true, message: `Subscription set to ${status}.` };
@@ -66,7 +86,8 @@ export async function setVendorActive(
   active: boolean
 ): Promise<ActionResult> {
   return runAction(async () => {
-    await requireRole(ROLES.SUPER_ADMIN);
+    const session = await requireRole(ROLES.SUPER_ADMIN);
+    if (!asObjectId(vendorId)) return { ok: false, error: "Invalid vendor." };
 
     await dbConnect();
     const vendor = await Vendor.findById(vendorId).select("_id").lean();
@@ -75,6 +96,13 @@ export async function setVendorActive(
     // Affects the owner plus all employee/office logins under this vendor.
     await User.updateMany({ vendor: vendorId }, { $set: { active } });
 
+    await logAudit({
+      action: active ? "admin.restore_vendor" : "admin.suspend_vendor",
+      actor: session.user.id,
+      actorEmail: session.user.email ?? null,
+      role: session.user.role,
+      target: vendorId,
+    });
     revalidatePath("/admin/vendors");
     return { ok: true, message: active ? "Vendor restored." : "Vendor suspended." };
   });

@@ -111,6 +111,41 @@ A daily job emails each office its delivery summary at **22:00 IST**.
 9. **✅ Super Admin**: vendor/subscription management + platform stats
 10. **✅ Polish**: responsive, empty/loading/error states, i18n scaffolding (en/hi/gu)
 
+## Security
+
+Cup Sync is multi-tenant; tenant isolation is the top priority.
+
+- **Tenant scoping:** every domain query filters by the session's `vendor` (and
+  `office`/`employee` where relevant) — never by id alone. The scoping id comes
+  only from the server session, never from the request. **IDOR-tested:** Vendor A
+  cannot read another vendor's office via the bill PDF, bill/rates pages, or
+  reports — no cross-tenant data is ever returned.
+- **AuthZ on the server, every time:** middleware routes by role; every page,
+  server action, and route handler re-checks role + ownership via `lib/guard.ts`.
+  Hiding UI is never the control.
+- **Employees never receive pricing** — the logging screen and APIs return
+  product names/quantities only; prices are snapshotted server-side.
+- **Passwords:** bcrypt cost 12, `select:false`, never returned or logged.
+- **Brute force:** login lockout after repeated failures (`lib/rate-limit.ts`,
+  in-memory; swap for Redis/Upstash in multi-instance production).
+- **Input validation:** Zod on every mutation; client-supplied IDs validated as
+  ObjectIds (`lib/ids.ts`) to prevent NoSQL injection; no mass assignment.
+- **Cron** secured by `CRON_SECRET`; **trial gating** enforced server-side.
+- **Headers:** HSTS, CSP, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`
+  (see `next.config.mjs`); `x-powered-by` disabled.
+- **Audit log:** logins, failed logins, lockouts, and super-admin actions are
+  recorded (`AuditLog`), without sensitive payloads.
+
+**`npm audit`:** the directly-exploitable nodemailer SMTP-injection advisories
+are patched (we run nodemailer 7.x). Remaining advisories are transitive and not
+in the runtime path — `@auth/core`'s bundled nodemailer (its unused Email
+provider; we use Credentials) and Next's nested build-time `postcss` (operates on
+our own trusted CSS). Their only npm "fix" is a bogus `next@9` downgrade.
+
+**Deployment-time (not code) — do before launch:** restrict MongoDB Atlas network
+access (no `0.0.0.0/0`), use a least-privilege DB user, enable backups, set a
+strong `AUTH_SECRET`, and serve over HTTPS (Vercel does this automatically).
+
 ## Internationalization (i18n)
 
 The app ships English copy but is built to switch languages. **English (`en`),

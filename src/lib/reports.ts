@@ -5,6 +5,7 @@ import { Office } from "@/models/Office";
 import { Employee } from "@/models/Employee";
 import "@/models/User";
 import { round2 } from "@/lib/money";
+import { asObjectId } from "@/lib/ids";
 
 export interface ReportFilters {
   vendor: string;
@@ -19,7 +20,12 @@ export interface ReportRow {
   dateKey: string;
   officeName: string;
   employeeName: string;
-  items: { name: string; quantity: number; unitPrice: number; lineTotal: number }[];
+  items: {
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+  }[];
   cups: number;
   total: number;
 }
@@ -34,12 +40,17 @@ export interface DeliveryReport {
  * Vendor-scoped delivery report. Amounts use the snapshotted `unitPrice` on
  * each delivery line, so they always reflect the price active that day.
  */
-export async function getDeliveryReport(filters: ReportFilters): Promise<DeliveryReport> {
+export async function getDeliveryReport(
+  filters: ReportFilters,
+): Promise<DeliveryReport> {
   await dbConnect();
 
   const query: Record<string, unknown> = { vendor: filters.vendor };
-  if (filters.office) query.office = filters.office;
-  if (filters.employee) query.employee = filters.employee;
+  // Validate client-supplied IDs so only well-formed ObjectIds reach the query.
+  const officeId = asObjectId(filters.office);
+  const employeeId = asObjectId(filters.employee);
+  if (officeId) query.office = officeId;
+  if (employeeId) query.employee = employeeId;
   if (filters.from || filters.to) {
     const range: Record<string, string> = {};
     if (filters.from) range.$gte = filters.from;
@@ -59,10 +70,16 @@ export async function getDeliveryReport(filters: ReportFilters): Promise<Deliver
     for (const it of d.items) productIds.add(String(it.product));
   }
 
+  // Scope name lookups to the vendor too (defense-in-depth — these IDs already
+  // come from vendor-scoped deliveries, but we never query by id alone).
   const [products, offices, employees] = await Promise.all([
-    Product.find({ _id: { $in: [...productIds] } }).select("name").lean(),
-    Office.find({ _id: { $in: [...officeIds] } }).select("name").lean(),
-    Employee.find({ _id: { $in: [...employeeIds] } })
+    Product.find({ _id: { $in: [...productIds] }, vendor: filters.vendor })
+      .select("name")
+      .lean(),
+    Office.find({ _id: { $in: [...officeIds] }, vendor: filters.vendor })
+      .select("name")
+      .lean(),
+    Employee.find({ _id: { $in: [...employeeIds] }, vendor: filters.vendor })
       .populate<{ user: { name: string } }>("user", "name")
       .select("user")
       .lean(),
@@ -70,7 +87,7 @@ export async function getDeliveryReport(filters: ReportFilters): Promise<Deliver
   const productName = new Map(products.map((p) => [String(p._id), p.name]));
   const officeName = new Map(offices.map((o) => [String(o._id), o.name]));
   const employeeName = new Map(
-    employees.map((e) => [String(e._id), e.user?.name ?? "—"])
+    employees.map((e) => [String(e._id), e.user?.name ?? "—"]),
   );
 
   const productAgg = new Map<string, { quantity: number; amount: number }>();
@@ -90,7 +107,12 @@ export async function getDeliveryReport(filters: ReportFilters): Promise<Deliver
       agg.quantity += it.quantity;
       agg.amount = round2(agg.amount + lineTotal);
       productAgg.set(name, agg);
-      return { name, quantity: it.quantity, unitPrice: it.unitPrice, lineTotal };
+      return {
+        name,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        lineTotal,
+      };
     });
     totalCups += cups;
     totalAmount = round2(totalAmount + total);
@@ -106,12 +128,20 @@ export async function getDeliveryReport(filters: ReportFilters): Promise<Deliver
   });
 
   const productTotals = [...productAgg.entries()]
-    .map(([name, agg]) => ({ name, quantity: agg.quantity, amount: agg.amount }))
+    .map(([name, agg]) => ({
+      name,
+      quantity: agg.quantity,
+      amount: agg.amount,
+    }))
     .sort((a, b) => b.amount - a.amount);
 
   return {
     rows,
-    totals: { deliveries: deliveries.length, cups: totalCups, amount: totalAmount },
+    totals: {
+      deliveries: deliveries.length,
+      cups: totalCups,
+      amount: totalAmount,
+    },
     productTotals,
   };
 }
