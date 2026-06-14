@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -106,6 +107,7 @@ export function AssignmentDialog({
             Cancel
           </Button>
           <Button onClick={onSave} disabled={loading || offices.length === 0}>
+            {loading && <Spinner className="h-4 w-4 text-primary-foreground" />}
             {loading ? "Saving…" : "Save assignments"}
           </Button>
         </DialogFooter>

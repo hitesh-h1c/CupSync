@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { dbConnect } from "@/lib/db";
 import { Subscription, type ISubscription } from "@/models/Subscription";
 import { AuthError } from "@/lib/guard";
@@ -60,17 +61,21 @@ export function computeSubscriptionState(
   };
 }
 
-/** Load a vendor's subscription and compute its effective state. */
-export async function getVendorSubscriptionState(
-  vendorId: string
-): Promise<SubscriptionState | null> {
-  await dbConnect();
-  const sub = await Subscription.findOne({ vendor: vendorId })
-    .select("status trialEndsAt")
-    .lean();
-  if (!sub) return null;
-  return computeSubscriptionState(sub);
-}
+/**
+ * Load a vendor's subscription and compute its effective state.
+ * Wrapped in React `cache()` so the layout and page in the same request share
+ * a single DB query instead of each fetching it.
+ */
+export const getVendorSubscriptionState = cache(
+  async (vendorId: string): Promise<SubscriptionState | null> => {
+    await dbConnect();
+    const sub = await Subscription.findOne({ vendor: vendorId })
+      .select("status trialEndsAt")
+      .lean();
+    if (!sub) return null;
+    return computeSubscriptionState(sub);
+  }
+);
 
 /**
  * Mutation guard. Call at the top of any create/edit/delete action scoped to a

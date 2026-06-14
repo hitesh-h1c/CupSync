@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import { logDelivery } from "./actions";
 
 type ProductOption = { id: string; name: string; unit: string };
@@ -106,6 +107,7 @@ export function LogForm({
           onClick={onSubmit}
           disabled={loading || totalCups === 0}
         >
+          {loading && <Spinner className="h-5 w-5 text-primary-foreground" />}
           {loading
             ? "Saving…"
             : `Submit delivery${totalCups > 0 ? ` · ${totalCups} item${totalCups === 1 ? "" : "s"}` : ""}`}

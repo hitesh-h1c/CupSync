@@ -6,6 +6,7 @@ import { signIn, getSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
 import { ROLE_HOME } from "@/lib/roles";
 
 export function LoginForm() {
@@ -28,14 +29,14 @@ export function LoginForm() {
       redirect: false,
     });
 
-    setLoading(false);
-
     if (!res || res.error) {
       setError("Invalid email or password.");
+      setLoading(false);
       return;
     }
 
-    // Route to the requested page, or to the role's home dashboard.
+    // Keep the button in its loading state through the session fetch and
+    // navigation — the form unmounts on redirect, so we never reset it.
     const session = await getSession();
     const role = session?.user?.role;
     const dest = callbackUrl ?? (role ? ROLE_HOME[role] : "/");
@@ -75,6 +76,7 @@ export function LoginForm() {
       )}
 
       <Button type="submit" className="w-full" disabled={loading}>
+        {loading && <Spinner className="h-4 w-4 text-primary-foreground" />}
         {loading ? "Logging in…" : "Log in"}
       </Button>
     </form>

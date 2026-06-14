@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -153,6 +154,7 @@ export function OfficeDialog({
 
           <DialogFooter>
             <Button type="submit" disabled={loading}>
+              {loading && <Spinner className="h-4 w-4 text-primary-foreground" />}
               {loading ? "Saving…" : mode === "create" ? "Add office" : "Save changes"}
             </Button>
           </DialogFooter>

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -122,6 +123,7 @@ export function EmployeeDialog({
 
           <DialogFooter>
             <Button type="submit" disabled={loading}>
+              {loading && <Spinner className="h-4 w-4 text-primary-foreground" />}
               {loading ? "Saving…" : mode === "create" ? "Add employee" : "Save changes"}
             </Button>
           </DialogFooter>

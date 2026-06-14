@@ -6,6 +6,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
 import { ROLE_HOME, ROLES } from "@/lib/roles";
 
 export function SignupForm() {
@@ -39,14 +40,12 @@ export function SignupForm() {
       return;
     }
 
-    // Account created — sign them straight in.
+    // Account created — sign them straight in. Keep loading through navigation.
     const signInRes = await signIn("credentials", {
       email: payload.email,
       password: payload.password,
       redirect: false,
     });
-
-    setLoading(false);
 
     if (!signInRes || signInRes.error) {
       // Account exists but auto-login failed — send them to log in manually.
@@ -104,6 +103,7 @@ export function SignupForm() {
       )}
 
       <Button type="submit" className="w-full" disabled={loading}>
+        {loading && <Spinner className="h-4 w-4 text-primary-foreground" />}
         {loading ? "Creating your account…" : "Start free trial"}
       </Button>
     </form>
