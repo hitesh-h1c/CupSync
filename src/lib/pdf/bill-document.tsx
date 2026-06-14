@@ -1,0 +1,131 @@
+/* Server-only: rendered to a PDF buffer via @react-pdf/renderer. */
+import {
+  Document,
+  Page,
+  Text,
+  View,
+  StyleSheet,
+} from "@react-pdf/renderer";
+import type { BillData } from "@/lib/bill";
+
+// Plain INR formatting (the PDF renderer can't rely on Intl in all runtimes).
+function rs(n: number): string {
+  return "Rs. " + (n ?? 0).toFixed(2);
+}
+
+const AMBER = "#B45309";
+const MUTED = "#78716C";
+const BORDER = "#E7E5E4";
+
+const styles = StyleSheet.create({
+  page: { padding: 36, fontSize: 10, color: "#1C1917", fontFamily: "Helvetica" },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
+  brand: { fontSize: 20, fontFamily: "Helvetica-Bold", color: AMBER },
+  business: { fontSize: 12, marginTop: 2 },
+  titleBlock: { textAlign: "right" },
+  title: { fontSize: 16, fontFamily: "Helvetica-Bold" },
+  muted: { color: MUTED },
+  section: { marginTop: 14 },
+  label: { fontSize: 8, textTransform: "uppercase", color: MUTED, marginBottom: 3 },
+  table: { marginTop: 6, borderTopWidth: 1, borderColor: BORDER },
+  row: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderColor: BORDER,
+    paddingVertical: 5,
+  },
+  th: { fontFamily: "Helvetica-Bold", color: MUTED, fontSize: 8, textTransform: "uppercase" },
+  cellName: { flex: 3 },
+  cellNum: { flex: 1, textAlign: "right" },
+  totalRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 10 },
+  totalBox: { flexDirection: "row", width: 200, justifyContent: "space-between" },
+  grand: { fontSize: 13, fontFamily: "Helvetica-Bold" },
+  detailDate: { flex: 2 },
+  footer: { marginTop: 24, fontSize: 8, color: MUTED },
+});
+
+export function BillDocument({ bill }: { bill: BillData }) {
+  return (
+    <Document title={`Bill ${bill.office.name} ${bill.monthLabel}`}>
+      <Page size="A4" style={styles.page}>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.brand}>Cup Sync</Text>
+            <Text style={styles.business}>{bill.business}</Text>
+          </View>
+          <View style={styles.titleBlock}>
+            <Text style={styles.title}>Monthly Bill</Text>
+            <Text style={styles.muted}>{bill.monthLabel}</Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Billed to</Text>
+          <Text style={{ fontFamily: "Helvetica-Bold" }}>{bill.office.name}</Text>
+          {bill.office.contactPerson ? <Text>{bill.office.contactPerson}</Text> : null}
+          {bill.office.address ? <Text style={styles.muted}>{bill.office.address}</Text> : null}
+        </View>
+
+        {/* Summary by product */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Summary by product</Text>
+          <View style={styles.table}>
+            <View style={styles.row}>
+              <Text style={[styles.th, styles.cellName]}>Product</Text>
+              <Text style={[styles.th, styles.cellNum]}>Qty</Text>
+              <Text style={[styles.th, styles.cellNum]}>Amount</Text>
+            </View>
+            {bill.productLines.map((p, i) => (
+              <View style={styles.row} key={i}>
+                <Text style={styles.cellName}>{p.name}</Text>
+                <Text style={styles.cellNum}>
+                  {p.quantity} {p.unit}
+                  {p.quantity === 1 ? "" : "s"}
+                </Text>
+                <Text style={styles.cellNum}>{rs(p.amount)}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={styles.totalRow}>
+            <View style={styles.totalBox}>
+              <Text style={styles.grand}>Total</Text>
+              <Text style={styles.grand}>{rs(bill.totals.amount)}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Day-wise detail — the dispute-proof record */}
+        <View style={styles.section}>
+          <Text style={styles.label}>
+            Day-wise detail ({bill.totals.deliveryDays} days, {bill.totals.cups} cups)
+          </Text>
+          <View style={styles.table}>
+            <View style={styles.row}>
+              <Text style={[styles.th, styles.detailDate]}>Date</Text>
+              <Text style={[styles.th, styles.cellName]}>Items</Text>
+              <Text style={[styles.th, styles.cellNum]}>Amount</Text>
+            </View>
+            {bill.days.map((d, i) => (
+              <View style={styles.row} key={i} wrap={false}>
+                <Text style={styles.detailDate}>
+                  {d.date} <Text style={styles.muted}>({d.weekday})</Text>
+                </Text>
+                <Text style={styles.cellName}>
+                  {d.items
+                    .map((it) => `${it.name} x${it.quantity} @ ${rs(it.unitPrice)}`)
+                    .join(", ")}
+                </Text>
+                <Text style={styles.cellNum}>{rs(d.dayTotal)}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <Text style={styles.footer}>
+          Generated by Cup Sync. Prices are recorded per delivery on the day of
+          service, so this bill reflects the rate in effect on each date.
+        </Text>
+      </Page>
+    </Document>
+  );
+}
